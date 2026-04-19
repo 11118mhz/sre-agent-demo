@@ -1,0 +1,34 @@
+services:
+
+  log-checker:
+    build: ./tools/log-checker
+    ports:
+      - "8001:8001"
+
+  metrics-checker:
+    build: ./tools/metrics-checker
+    ports:
+      - "8002:8002"
+
+  deploy-checker:
+    build: ./tools/deploy-checker
+    ports:
+      - "8003:8003"
+
+  mock-infra:
+    build: ./mock-infra
+    ports:
+      - "8004:8004"
+
+
+  ui:
+    build: ./ui
+    ports:
+      - "8080:8080"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    depends_on:
+      - log-checker
+      - metrics-checker
+      - deploy-checker
+      - mock-infra

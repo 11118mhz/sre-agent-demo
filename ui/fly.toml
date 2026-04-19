@@ -1,0 +1,22 @@
+app = "sre-agent-ui"
+primary_region = "ewr"
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[env]
+  LOG_CHECKER_URL = "http://sre-agent-log-checker.flycast"
+  METRICS_CHECKER_URL = "http://sre-agent-metrics-checker.flycast"
+  DEPLOY_CHECKER_URL = "http://sre-agent-deploy-checker.flycast"
+  MOCK_INFRA_URL = "http://sre-agent-mock-infra.flycast"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
