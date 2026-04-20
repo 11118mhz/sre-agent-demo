@@ -1,0 +1,23 @@
+app = "sre-agent-rag-service"
+primary_region = "ewr"
+
+[build]
+
+[http_service]
+  internal_port = 8005
+  force_https = false
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[env]
+  RAG_DATA_DIR = "/app/data"
+
+[mounts]
+  source = "rag_data"
+  destination = "/app/data"
+
+[[vm]]
+  memory = "1024mb"
+  cpu_kind = "shared"
+  cpus = 1
