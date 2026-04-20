@@ -1,8 +1,8 @@
 # SRE Agent Demo
 
-An AI-powered incident investigation tool that autonomously diagnoses infrastructure issues and proposes remediations — with a human approval gate before anything touches production.
+An AI-powered incident investigation tool that autonomously diagnoses infrastructure issues, draws on a library of past incidents, proposes remediations with human approval, and writes structured incident reports — all streamed live to a browser UI.
 
-Built with the Anthropic Claude API, FastAPI, and Server-Sent Events for real-time streaming.
+Built with the Anthropic Claude API, FastAPI, ChromaDB, and Server-Sent Events.
 
 **Live demo:** https://sre-agent-ui.fly.dev
 
@@ -12,50 +12,41 @@ Built with the Anthropic Claude API, FastAPI, and Server-Sent Events for real-ti
 
 When an alert fires, the agent:
 
-1. Gathers data autonomously — metrics, logs, pod status, and recent deployment history
-2. Reasons across all the evidence to form a diagnosis
-3. Proposes a remediation action (rollback, pod restart, etc.)
-4. **Pauses and waits for human approval** before executing anything
-5. Executes the approved action and summarises the outcome
+1. **Gathers data autonomously** — metrics, logs, pod status, and recent deployment history
+2. **Searches past incidents** — queries a vector database of previous incidents for similar cases
+3. **Forms a diagnosis** — reasons across current evidence and historical precedent
+4. **Proposes remediation** — calls the appropriate tool and pauses for human approval
+5. **Executes on approval** — takes action only after explicit operator sign-off
+6. **Writes an incident report** — a second agent pass produces a structured report streamed live to the UI
+7. **Stores the report** — adds the new incident to the library so the system learns from every investigation
 
-The human-in-the-loop approval gate is a first-class feature, not an afterthought. The agent can investigate freely but cannot touch production without explicit operator sign-off.
+The human-in-the-loop approval gate is a first-class feature. The agent investigates freely but cannot touch production without explicit sign-off. A manual search bar lets operators inject their own past-incident queries at any point during an investigation.
 
 ---
 
 ## Architecture
-┌─────────────────────────────────────────────────────┐
-│                    Browser UI                        │
-│         (SSE stream + approve/deny buttons)          │
-└─────────────────┬───────────────────────────────────┘
-│
-┌─────────────────▼───────────────────────────────────┐
-│                  UI Service (port 8080)               │
-│         FastAPI + Anthropic Claude SDK               │
-│         Runs agent loop, streams events via SSE      │
-└────┬──────────┬──────────┬──────────┬───────────────┘
-│          │          │          │
-┌────▼───┐ ┌───▼────┐ ┌───▼────┐ ┌──▼──────┐
-│  Log   │ │Metrics │ │Deploy  │ │  Mock   │
-│Checker │ │Checker │ │Checker │ │  Infra  │
-│ :8001  │ │ :8002  │ │ :8003  │ │  :8004  │
-└────────┘ └────────┘ └────────┘ └─────────┘
 
-All services are stateless FastAPI microservices running in Docker. The UI service owns the agent loop and communicates with tool services over HTTP.
+All services are stateless FastAPI microservices. The RAG service wraps ChromaDB with a sentence-transformer embedding model for semantic incident search.
+
+- **UI Service** :8080 — FastAPI, Claude SDK, agent loop, report writer, SSE streaming
+- **Log Checker** :8001 — Simulated log entries per service
+- **Metrics Checker** :8002 — Simulated metrics per service
+- **Deploy Checker** :8003 — Simulated deployment history per service
+- **Mock Infra** :8004 — Simulated pod status, restart, rollback
+- **RAG Service** :8005 — ChromaDB + sentence-transformer semantic search
 
 ---
 
 ## Demo scenarios
 
-The demo includes four pre-built incident scenarios, each covering a different class of real-world failure:
+| Scenario | Root cause | Key reasoning | Remediation |
+|---|---|---|---|
+| payment-api | DB pool size misconfigured in deploy | Config change timing + pool exhaustion | Rollback |
+| recommendation-service | Memory leak introduced 4 days ago | Long uptime + progressive GC warnings | Rollback |
+| checkout-service | Upstream dependency down | Victim vs culprit reasoning | Escalate |
+| auth-service | TLS cert rotated before clients trusted new CA | Cert rotation timing + TLS errors | Rollback |
 
-| Scenario | Root cause | What the agent does |
-|---|---|---|
-| `payment-api` | DB pool size misconfigured in a recent deploy | Identifies config change, recommends rollback |
-| `recommendation-service` | Memory leak introduced 4 days ago | Spots long pod uptime + progressive GC warnings, recommends rollback |
-| `checkout-service` | Upstream dependency (`inventory-api`) is down | Correctly identifies checkout as victim, escalates rather than remediating |
-| `auth-service` | TLS cert rotated before clients trusted new CA | Correlates cert rotation timing with TLS errors, recommends rollback |
-
-Each scenario is designed to require different reasoning — the absence of a recent deploy, upstream vs. local failure, infrastructure vs. application changes.
+Each scenario requires different reasoning. The RAG layer surfaces relevant past incidents, and every completed investigation is stored back into the library.
 
 ---
 
@@ -63,73 +54,70 @@ Each scenario is designed to require different reasoning — the absence of a re
 
 **Prerequisites:** Docker Desktop, an Anthropic API key
 
-```bash
-git clone https://github.com/YOUR_USERNAME/sre-agent-demo.git
-cd sre-agent-demo
-export ANTHROPIC_API_KEY=your-key-here
-docker compose up --build
-```
+    git clone https://github.com/11118mhz/sre-agent-demo.git
+    cd sre-agent-demo
+    export ANTHROPIC_API_KEY=your-key-here
+    docker compose up --build
 
-Then open http://localhost:8080.
+Open http://localhost:8080. On first startup the RAG service seeds 10 incidents into ChromaDB automatically.
 
 ---
 
 ## Project structure
-infra-agent/
-├── ui/                          # Web UI + agent loop
-│   ├── app.py                   # FastAPI app, SSE streaming, agent orchestration
-│   └── templates/index.html     # Single-page UI
-├── tools/
-│   ├── log-checker/app.py       # Returns simulated log entries per service
-│   ├── metrics-checker/app.py   # Returns simulated metrics per service
-│   └── deploy-checker/app.py    # Returns simulated deployment history
-├── mock-infra/app.py            # Simulates pod status, restart, and rollback
-├── agent/app.py                 # Original terminal-only agent (superseded by UI)
-└── docker-compose.yml
+
+    infra-agent/
+    ├── ui/                       # Web UI + agent loop + report writer
+    │   ├── app.py                # FastAPI, SSE streaming, agent orchestration
+    │   └── templates/index.html  # Single-page UI with manual search
+    ├── rag-service/              # Incident library and semantic search
+    │   ├── app.py                # /search, /store, /health endpoints
+    │   ├── store.py              # ChromaDB wrapper and embedding logic
+    │   └── seed_incidents.py     # 10 seed incidents across 4 failure categories
+    ├── tools/
+    │   ├── log-checker/          # Simulated logs per service
+    │   ├── metrics-checker/      # Simulated metrics per service
+    │   └── deploy-checker/       # Simulated deployment history per service
+    ├── mock-infra/               # Simulated pod status, restart, rollback
+    └── docker-compose.yml
 
 ---
 
 ## Key design decisions
 
-**Why FastAPI microservices instead of a monolith?**
-Each tool service is independently replaceable. Swapping `mock-infra` for a real Kubernetes API client, or pointing `metrics-checker` at a real Prometheus instance, requires no changes to the agent or UI.
+**RAG for incident history** — Semantic search finds structurally similar incidents even when terminology differs. A query about connection pool exhaustion correctly surfaces past incidents about database connection limits and pool size misconfiguration.
 
-**Why Server-Sent Events instead of WebSockets?**
-SSE is unidirectional (server → client) which matches the data flow perfectly. Simpler to implement, no reconnection logic needed, and works through most proxies without configuration.
+**Second agent pass for reports** — A separate report-writing pass with the full transcript as context produces cleaner output than asking the investigation agent to write a report mid-loop.
 
-**Why a human approval gate?**
-An agent that can investigate freely but requires sign-off before executing remediations is a realistic and safe model for production use. The approval gate is implemented as an `asyncio.Queue` — the agent loop blocks on `await approval_queue.get()` until the operator clicks Approve or Deny in the browser.
+**Reports stored back into the library** — Every investigation adds to institutional memory. After real use, the library contains actual incident history from your environment, making future investigations progressively more informed.
+
+**Human approval gate** — Implemented as an asyncio.Queue. The agent loop blocks on await approval_queue.get() until the operator clicks Approve or Deny in the browser.
 
 ---
 
-## Deploying to fly.io
+## Incident library
 
-Each service has a `fly.toml` config. Deploy in this order:
+The seed library covers 10 incidents across 4 failure categories:
 
-```bash
-# Backend services first
-cd tools/log-checker && fly apps create sre-agent-log-checker && fly deploy && cd ../..
-cd tools/metrics-checker && fly apps create sre-agent-metrics-checker && fly deploy && cd ../..
-cd tools/deploy-checker && fly apps create sre-agent-deploy-checker && fly deploy && cd ../..
-cd mock-infra && fly apps create sre-agent-mock-infra && fly deploy && cd ..
+| Category | Count | Examples |
+|---|---|---|
+| Misconfiguration | 3 | DB pool reduction, memory limit change, rate limit scope |
+| Runtime degradation | 2 | Memory leak, thread pool exhaustion |
+| Dependency failure | 3 | Upstream service down, replica lag, queue backlog |
+| Infrastructure change | 2 | TLS cert rotation, DNS TTL stale records |
 
-# UI last (needs backends running first)
-cd ui
-fly apps create sre-agent-ui
-fly secrets set ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
-fly secrets set \
-  LOG_CHECKER_URL=https://sre-agent-log-checker.fly.dev \
-  METRICS_CHECKER_URL=https://sre-agent-metrics-checker.fly.dev \
-  DEPLOY_CHECKER_URL=https://sre-agent-deploy-checker.fly.dev \
-  MOCK_INFRA_URL=https://sre-agent-mock-infra.fly.dev
-fly deploy
-```
+The library persists between runs via a Docker volume mount at ./rag-data.
 
 ---
 
 ## Roadmap
 
-- [ ] Replace mock services with real backends (Prometheus, Kubernetes API, log aggregator)
-- [ ] Fault injection panel — trigger incidents on demand during live demos
-- [ ] Multi-service investigation — agent follows dependency chains across services
-- [ ] Persistent investigation history
+- Version 2 approval gate: agent proposes RAG search query, operator approves/edits before executing
+- Multi-agent architecture: triage agent routes to specialist agents per failure domain
+- Real backends: swap mock services for Prometheus, Kubernetes API, and log aggregator clients
+- Fault injection panel: trigger incidents on demand for live demos
+
+---
+
+## Documentation
+
+- [Original demo README v1](docs/README-v1-original-demo.md) — the initial four-scenario demo before RAG and report writing were added
