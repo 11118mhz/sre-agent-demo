@@ -7,241 +7,64 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0f1117;
-      color: #e2e8f0;
-      min-height: 100vh;
-      padding: 2rem;
-    }
-
-    h1 {
-      font-size: 1.4rem;
-      font-weight: 600;
-      color: #f8fafc;
-      margin-bottom: 0.25rem;
-    }
-
-    .subtitle {
-      font-size: 0.85rem;
-      color: #64748b;
-      margin-bottom: 2rem;
-    }
-
-    .input-row {
-      display: flex;
-      gap: 0.75rem;
-      margin-bottom: 2rem;
-    }
-
-    textarea {
-      flex: 1;
-      background: #1e2330;
-      border: 1px solid #2d3748;
-      border-radius: 8px;
-      color: #e2e8f0;
-      font-size: 0.9rem;
-      padding: 0.75rem 1rem;
-      resize: vertical;
-      min-height: 80px;
-      font-family: inherit;
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: #4f6ef7;
-    }
-
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 2rem; }
+    h1 { font-size: 1.4rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.25rem; }
+    .subtitle { font-size: 0.85rem; color: #64748b; margin-bottom: 2rem; }
+    .input-row { display: flex; gap: 0.75rem; margin-bottom: 2rem; }
+    textarea { flex: 1; background: #1e2330; border: 1px solid #2d3748; border-radius: 8px; color: #e2e8f0; font-size: 0.9rem; padding: 0.75rem 1rem; resize: vertical; min-height: 80px; font-family: inherit; }
+    textarea:focus { outline: none; border-color: #4f6ef7; }
     textarea::placeholder { color: #4a5568; }
-
-    button {
-      cursor: pointer;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      padding: 0 1.5rem;
-      transition: opacity 0.15s;
-    }
-
+    button { cursor: pointer; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 500; padding: 0 1.5rem; transition: opacity 0.15s; }
     button:hover { opacity: 0.85; }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    #submit-btn {
-      background: #4f6ef7;
-      color: white;
-      align-self: flex-start;
-      height: 42px;
-      white-space: nowrap;
-    }
-
-    .timeline {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .event {
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      font-size: 0.875rem;
-      line-height: 1.6;
-      animation: fadeIn 0.2s ease;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .event-alert {
-      background: #2d1f1f;
-      border-left: 3px solid #f87171;
-      color: #fca5a5;
-      font-weight: 500;
-    }
-
-    .event-tool_call {
-      background: #1a2035;
-      border-left: 3px solid #4f6ef7;
-      color: #93c5fd;
-      font-family: "SF Mono", "Fira Code", monospace;
-      font-size: 0.82rem;
-    }
-
-    .event-tool_result {
-      background: #1a2535;
-      border-left: 3px solid #34d399;
-      color: #6ee7b7;
-      font-family: "SF Mono", "Fira Code", monospace;
-      font-size: 0.82rem;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-
-    .event-agent_text {
-      background: #1e2330;
-      border-left: 3px solid #a78bfa;
-      color: #ddd6fe;
-      white-space: pre-wrap;
-    }
-
-    .event-done {
-      background: #1a2d1f;
-      border-left: 3px solid #34d399;
-      color: #6ee7b7;
-      font-weight: 500;
-    }
-
-    .event-approval {
-      background: #2d2210;
-      border-left: 3px solid #fbbf24;
-      color: #fde68a;
-    }
-
-    .approval-header {
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-      color: #fbbf24;
-    }
-
-    .approval-detail {
-      font-family: "SF Mono", "Fira Code", monospace;
-      font-size: 0.82rem;
-      margin-bottom: 0.75rem;
-      color: #fde68a;
-    }
-
-    .approval-buttons {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .btn-approve {
-      background: #065f46;
-      color: #6ee7b7;
-      padding: 0.4rem 1.25rem;
-    }
-
-    .btn-deny {
-      background: #7f1d1d;
-      color: #fca5a5;
-      padding: 0.4rem 1.25rem;
-    }
-
-    .event-approval_granted {
-      background: #1a2d1f;
-      border-left: 3px solid #34d399;
-      color: #6ee7b7;
-    }
-
-    .event-approval_denied {
-      background: #2d1f1f;
-      border-left: 3px solid #f87171;
-      color: #fca5a5;
-    }
-
-    .label {
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      opacity: 0.6;
-      margin-bottom: 0.25rem;
-    }
-
-    .spinner {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      border: 2px solid #4f6ef7;
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      margin-right: 0.5rem;
-      vertical-align: middle;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .status-bar {
-      font-size: 0.8rem;
-      color: #64748b;
-      margin-bottom: 1rem;
-      min-height: 1.2rem;
-    }
-
-    .presets {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 0.75rem;
-      flex-wrap: wrap;
-    }
-
-    .preset-btn {
-      background: #1e2330;
-      color: #94a3b8;
-      border: 1px solid #2d3748;
-      border-radius: 6px;
-      font-size: 0.78rem;
-      padding: 0.3rem 0.75rem;
-    }
-
-    .preset-btn:hover {
-      background: #2d3748;
-      color: #e2e8f0;
-      opacity: 1;
-    }
+    #submit-btn { background: #4f6ef7; color: white; align-self: flex-start; height: 42px; white-space: nowrap; }
+    .timeline { display: flex; flex-direction: column; gap: 0.75rem; }
+    .event { border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.875rem; line-height: 1.6; animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .event-alert { background: #2d1f1f; border-left: 3px solid #f87171; color: #fca5a5; font-weight: 500; }
+    .event-tool_call { background: #1a2035; border-left: 3px solid #4f6ef7; color: #93c5fd; font-family: "SF Mono", "Fira Code", monospace; font-size: 0.82rem; }
+    .event-tool_result { background: #1a2535; border-left: 3px solid #34d399; color: #6ee7b7; font-family: "SF Mono", "Fira Code", monospace; font-size: 0.82rem; white-space: pre-wrap; word-break: break-all; }
+    .event-agent_text { background: #1e2330; border-left: 3px solid #a78bfa; color: #ddd6fe; white-space: pre-wrap; }
+    .event-agent_text h1, .event-agent_text h2, .event-agent_text h3 { color: #c4b5fd; margin: 0.5rem 0 0.25rem; }
+    .event-agent_text ul, .event-agent_text ol { margin-left: 1.5rem; }
+    .event-agent_text strong { color: #e9d5ff; }
+    .event-done { background: #1a2d1f; border-left: 3px solid #34d399; color: #6ee7b7; font-weight: 500; }
+    .event-approval { background: #2d2210; border-left: 3px solid #fbbf24; color: #fde68a; }
+    .approval-header { font-weight: 600; margin-bottom: 0.5rem; color: #fbbf24; }
+    .approval-detail { font-family: "SF Mono", "Fira Code", monospace; font-size: 0.82rem; margin-bottom: 0.75rem; color: #fde68a; }
+    .approval-buttons { display: flex; gap: 0.5rem; }
+    .btn-approve { background: #065f46; color: #6ee7b7; padding: 0.4rem 1.25rem; }
+    .btn-deny { background: #7f1d1d; color: #fca5a5; padding: 0.4rem 1.25rem; }
+    .event-approval_granted { background: #1a2d1f; border-left: 3px solid #34d399; color: #6ee7b7; }
+    .event-approval_denied { background: #2d1f1f; border-left: 3px solid #f87171; color: #fca5a5; }
+    .event-rag_search { background: #1a1f35; border-left: 3px solid #818cf8; color: #c7d2fe; font-size: 0.82rem; }
+    .rag-incident { background: #0f1117; border-radius: 6px; padding: 0.6rem 0.75rem; margin-top: 0.5rem; border: 1px solid #2d3748; }
+    .rag-incident-title { font-weight: 600; color: #818cf8; margin-bottom: 0.25rem; }
+    .rag-incident-meta { font-size: 0.75rem; color: #64748b; margin-bottom: 0.25rem; }
+    .rag-similarity { display: inline-block; background: #1e2330; border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.72rem; color: #818cf8; margin-left: 0.5rem; }
+    .event-report { background: #1a2030; border-left: 3px solid #38bdf8; color: #bae6fd; }
+    .event-report h1, .event-report h2, .event-report h3 { color: #7dd3fc; margin: 0.75rem 0 0.25rem; }
+    .event-report h2:first-child { margin-top: 0; }
+    .event-report ul, .event-report ol { margin-left: 1.5rem; }
+    .event-report strong { color: #e0f2fe; }
+    .event-report-stored { background: #1a2535; border-left: 3px solid #34d399; color: #6ee7b7; font-size: 0.82rem; }
+    .manual-search-bar { display: none; gap: 0.5rem; margin-bottom: 1rem; align-items: center; }
+    .manual-search-bar.visible { display: flex; }
+    .manual-search-bar input { flex: 1; background: #1e2330; border: 1px solid #4f6ef7; border-radius: 8px; color: #e2e8f0; font-size: 0.85rem; padding: 0.5rem 0.75rem; font-family: inherit; }
+    .manual-search-bar input:focus { outline: none; border-color: #818cf8; }
+    .btn-search { background: #312e81; color: #c7d2fe; padding: 0.5rem 1rem; white-space: nowrap; }
+    .label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; margin-bottom: 0.25rem; }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #4f6ef7; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 0.5rem; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status-bar { font-size: 0.8rem; color: #64748b; margin-bottom: 1rem; min-height: 1.2rem; }
+    .presets { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+    .preset-btn { background: #1e2330; color: #94a3b8; border: 1px solid #2d3748; border-radius: 6px; font-size: 0.78rem; padding: 0.3rem 0.75rem; }
+    .preset-btn:hover { background: #2d3748; color: #e2e8f0; opacity: 1; }
   </style>
 </head>
 <body>
-
   <h1>🚨 SRE Agent</h1>
   <p class="subtitle">Submit an alert to begin an AI-assisted investigation.</p>
-
   <div class="presets">
     <span style="font-size:0.78rem;color:#4a5568;align-self:center;margin-right:0.25rem;">Quick alerts:</span>
     <button class="preset-btn" onclick="setAlert('payment-api is showing elevated error rates and high latency. Investigate and remediate.')">payment-api</button>
@@ -249,29 +72,24 @@
     <button class="preset-btn" onclick="setAlert('checkout-service is showing elevated latency. Customers are reporting slow checkouts. Investigate and remediate.')">checkout-service</button>
     <button class="preset-btn" onclick="setAlert('auth-service is showing a high authentication failure rate. Users are unable to log in. Investigate and remediate.')">auth-service</button>
   </div>
-
   <div class="input-row">
     <textarea id="alert-input" placeholder="e.g. payment-api is showing elevated error rates and high latency. Investigate and remediate."></textarea>
     <button id="submit-btn" onclick="startInvestigation()">Investigate</button>
   </div>
-
   <div class="status-bar" id="status"></div>
+  <div class="manual-search-bar" id="manual-search-bar">
+    <span style="font-size:0.78rem;color:#818cf8;white-space:nowrap;">🔍 Search past incidents:</span>
+    <input type="text" id="search-input" placeholder="e.g. database connection pool exhausted after deploy" />
+    <button class="btn-search" onclick="manualSearch()">Search</button>
+  </div>
   <div class="timeline" id="timeline"></div>
-
   <script>
     let currentSessionId = null;
-
-    function setAlert(text) {
-      document.getElementById('alert-input').value = text;
-    }
-
+    function setAlert(text) { document.getElementById('alert-input').value = text; }
     function setStatus(text, spinning = false) {
       const bar = document.getElementById('status');
-      bar.innerHTML = spinning
-        ? `<span class="spinner"></span>${text}`
-        : text;
+      bar.innerHTML = spinning ? `<span class="spinner"></span>${text}` : text;
     }
-
     function addEvent(cls, labelText, bodyHtml) {
       const el = document.createElement('div');
       el.className = `event ${cls}`;
@@ -280,109 +98,75 @@
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return el;
     }
-
-    function formatJSON(obj) {
-      return JSON.stringify(obj, null, 2);
+    function formatJSON(obj) { return JSON.stringify(obj, null, 2); }
+    function renderRAGResults(data) {
+      const incidents = data.incidents || [];
+      if (incidents.length === 0) return '<em>No similar past incidents found.</em>';
+      return incidents.map(inc => `
+        <div class="rag-incident">
+          <div class="rag-incident-title">${inc.service} — ${inc.root_cause_category || 'unknown'}<span class="rag-similarity">${Math.round((inc.similarity_score || 0) * 100)}% match</span></div>
+          <div class="rag-incident-meta">${inc.timestamp ? inc.timestamp.slice(0,10) : ''} · ${inc.duration_minutes || 0} min</div>
+          <div><strong>Root cause:</strong> ${inc.root_cause || 'N/A'}</div>
+          <div><strong>Remediation:</strong> ${inc.remediation || 'N/A'}</div>
+        </div>`).join('');
     }
-
     async function startInvestigation() {
       const alert = document.getElementById('alert-input').value.trim();
       if (!alert) return;
-
-      // Reset UI
       document.getElementById('timeline').innerHTML = '';
       document.getElementById('submit-btn').disabled = true;
+      document.getElementById('manual-search-bar').classList.add('visible');
       setStatus('Starting investigation...', true);
       currentSessionId = null;
-
-      // Start the investigation
-      const res = await fetch('/investigate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alert })
-      });
+      const res = await fetch('/investigate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ alert }) });
       const { session_id } = await res.json();
       currentSessionId = session_id;
-
-      // Open SSE stream
       const evtSource = new EventSource(`/stream/${session_id}`);
-
-      evtSource.addEventListener('alert', e => {
-        const d = JSON.parse(e.data);
-        addEvent('event-alert', '🚨 Alert', d.message);
-        setStatus('Agent is investigating...', true);
-      });
-
+      evtSource.addEventListener('alert', e => { const d = JSON.parse(e.data); addEvent('event-alert', '🚨 Alert', d.message); setStatus('Agent is investigating...', true); });
       evtSource.addEventListener('tool_call', e => {
         const d = JSON.parse(e.data);
-        addEvent('event-tool_call', '🔧 Tool Call',
-          `<strong>${d.tool}</strong>\n${formatJSON(d.inputs)}`);
+        if (d.tool === 'search_past_incidents') { addEvent('event-tool_call', '🔍 Searching Past Incidents', `<strong>Query:</strong> ${d.inputs.query}`); }
+        else { addEvent('event-tool_call', '🔧 Tool Call', `<strong>${d.tool}</strong>\n${formatJSON(d.inputs)}`); }
       });
-
       evtSource.addEventListener('tool_result', e => {
         const d = JSON.parse(e.data);
-        addEvent('event-tool_result', '📦 Result',
-          formatJSON(d.result));
+        if (d.tool === 'search_past_incidents') { addEvent('event-rag_search', '📚 Past Incidents Found', renderRAGResults(d.result)); }
+        else { addEvent('event-tool_result', '📦 Result', formatJSON(d.result)); }
       });
-
-      evtSource.addEventListener('agent_text', e => {
-        const d = JSON.parse(e.data);
-        addEvent('event-agent_text', '🤖 Agent', marked.parse(d.text));
-      });
-
+      evtSource.addEventListener('agent_text', e => { const d = JSON.parse(e.data); addEvent('event-agent_text', '🤖 Agent', marked.parse(d.text)); });
       evtSource.addEventListener('approval_required', e => {
         const d = JSON.parse(e.data);
         setStatus('⏸ Waiting for your approval...', false);
-
-        const el = addEvent('event-approval', '⚠️ Approval Required', `
-          <div class="approval-header">Action: ${d.tool}</div>
-          <div class="approval-detail">${formatJSON(d.inputs)}</div>
-          <div class="approval-buttons">
-            <button class="btn-approve" onclick="sendApproval(true, this)">✅ Approve</button>
-            <button class="btn-deny"    onclick="sendApproval(false, this)">❌ Deny</button>
-          </div>
-        `);
+        addEvent('event-approval', '⚠️ Approval Required', `<div class="approval-header">Action: ${d.tool}</div><div class="approval-detail">${formatJSON(d.inputs)}</div><div class="approval-buttons"><button class="btn-approve" onclick="sendApproval(true, this)">✅ Approve</button><button class="btn-deny" onclick="sendApproval(false, this)">❌ Deny</button></div>`);
       });
-
-      evtSource.addEventListener('approval_granted', e => {
-        addEvent('event-approval_granted', '✅ Approved', 'Action approved — executing.');
-        setStatus('Agent is continuing...', true);
+      evtSource.addEventListener('approval_granted', e => { addEvent('event-approval_granted', '✅ Approved', 'Action approved — executing.'); setStatus('Agent is continuing...', true); });
+      evtSource.addEventListener('approval_denied', e => { addEvent('event-approval_denied', '❌ Denied', 'Action denied by operator.'); setStatus('Agent is continuing...', true); });
+      evtSource.addEventListener('manual_search_result', e => { const d = JSON.parse(e.data); addEvent('event-rag_search', `📚 Manual Search: "${d.query}"`, renderRAGResults(d.result)); });
+      evtSource.addEventListener('report_start', e => { setStatus('Writing incident report...', true); addEvent('event-report', '📝 Incident Report', '<em>Generating report...</em>'); });
+      evtSource.addEventListener('report_text', e => {
+        const d = JSON.parse(e.data);
+        const reports = document.querySelectorAll('.event-report');
+        const lastReport = reports[reports.length - 1];
+        if (lastReport) { lastReport.innerHTML = `<div class="label">📝 Incident Report</div>${marked.parse(d.text)}`; }
       });
-
-      evtSource.addEventListener('approval_denied', e => {
-        addEvent('event-approval_denied', '❌ Denied', 'Action denied by operator.');
-        setStatus('Agent is continuing...', true);
-      });
-
-      evtSource.addEventListener('done', e => {
-        setStatus('✅ Investigation complete.');
-        document.getElementById('submit-btn').disabled = false;
-        evtSource.close();
-      });
-
+      evtSource.addEventListener('report_stored', e => { const d = JSON.parse(e.data); addEvent('event-report-stored', '💾 Library Updated', d.message); });
+      evtSource.addEventListener('done', e => { setStatus('✅ Investigation complete.'); document.getElementById('submit-btn').disabled = false; document.getElementById('manual-search-bar').classList.remove('visible'); evtSource.close(); });
       evtSource.addEventListener('heartbeat', () => {});
-
-      evtSource.onerror = () => {
-        setStatus('Connection lost.');
-        document.getElementById('submit-btn').disabled = false;
-        evtSource.close();
-      };
+      evtSource.onerror = () => { setStatus('Connection lost.'); document.getElementById('submit-btn').disabled = false; document.getElementById('manual-search-bar').classList.remove('visible'); evtSource.close(); };
     }
-
     async function sendApproval(approved, btn) {
       if (!currentSessionId) return;
-
-      // Disable both buttons immediately to prevent double-click
       const container = btn.closest('.approval-buttons');
       container.querySelectorAll('button').forEach(b => b.disabled = true);
-
-      await fetch(`/approve/${currentSessionId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approved })
-      });
+      await fetch(`/approve/${currentSessionId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ approved }) });
+    }
+    async function manualSearch() {
+      if (!currentSessionId) return;
+      const query = document.getElementById('search-input').value.trim();
+      if (!query) return;
+      document.getElementById('search-input').value = '';
+      await fetch(`/search-incidents/${currentSessionId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) });
     }
   </script>
-
 </body>
 </html>

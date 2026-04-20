@@ -4,6 +4,7 @@ import asyncio
 import uuid
 import httpx
 import anthropic
+from datetime import datetime
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -14,17 +15,14 @@ LOG_CHECKER_URL     = os.environ.get("LOG_CHECKER_URL",     "http://log-checker:
 METRICS_CHECKER_URL = os.environ.get("METRICS_CHECKER_URL", "http://metrics-checker:8002")
 DEPLOY_CHECKER_URL  = os.environ.get("DEPLOY_CHECKER_URL",  "http://deploy-checker:8003")
 MOCK_INFRA_URL      = os.environ.get("MOCK_INFRA_URL",      "http://mock-infra:8004")
+RAG_SERVICE_URL     = os.environ.get("RAG_SERVICE_URL",     "http://rag-service:8005")
 
 app = FastAPI(title="SRE Agent UI")
 templates = Jinja2Templates(directory="templates")
 
-# --- In-memory session store ---
-# Each running investigation gets a session ID. The session holds
-# the approval queue (an asyncio.Queue) so the UI can pause the
-# agent and wait for a human decision before continuing.
 sessions: dict[str, dict] = {}
 
-# --- Tool Definitions (same as before) ---
+# --- Tool Definitions ---
 TOOLS = [
     {
         "name": "get_logs",
@@ -74,6 +72,30 @@ TOOLS = [
         }
     },
     {
+        "name": "search_past_incidents",
+        "description": (
+            "Search the incident library for similar past incidents. "
+            "Use this when you have gathered enough evidence to form a hypothesis "
+            "and want to check if similar incidents have occurred before. "
+            "Provide a natural language description of what you are seeing."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural language description of the current symptoms and suspected root cause"
+                },
+                "n_results": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "Number of past incidents to retrieve"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
         "name": "restart_pod",
         "description": "REMEDIATION: Restart a specific pod. Requires human approval.",
         "input_schema": {
@@ -112,6 +134,8 @@ def execute_tool(name: str, inputs: dict) -> dict:
             return http.post(f"{DEPLOY_CHECKER_URL}/deployments", json=inputs).json()
         elif name == "get_pod_status":
             return http.post(f"{MOCK_INFRA_URL}/pod-status", json=inputs).json()
+        elif name == "search_past_incidents":
+            return http.post(f"{RAG_SERVICE_URL}/search", json=inputs).json()
         elif name == "restart_pod":
             return http.post(f"{MOCK_INFRA_URL}/restart-pod", json=inputs).json()
         elif name == "rollback":
@@ -122,20 +146,111 @@ def execute_tool(name: str, inputs: dict) -> dict:
 def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
-# --- Agent loop (runs in background, streams events to the UI) ---
+# --- Report Writer ---
+async def write_incident_report(
+    session_id: str,
+    alert: str,
+    service: str,
+    investigation_transcript: list,
+    queue: asyncio.Queue
+):
+    """Second agent pass — writes a structured incident report from the investigation transcript."""
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    await queue.put(sse("report_start", {"message": "Writing incident report..."}))
+
+    transcript_text = json.dumps(investigation_transcript, indent=2)
+
+    report_prompt = f"""You are an SRE technical writer. Based on the following investigation transcript, write a structured incident report.
+
+Alert: {alert}
+Service: {service}
+
+Investigation transcript:
+{transcript_text}
+
+Write a structured incident report with these exact sections:
+## Incident Summary
+## Timeline
+## Root Cause
+## Evidence
+## Remediation Taken
+## Follow-up Actions
+
+Be concise, specific, and use technical language appropriate for an SRE audience."""
+
+    response = await asyncio.get_event_loop().run_in_executor(
+        None,
+        lambda: client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": report_prompt}]
+        )
+    )
+
+    report_text = response.content[0].text
+
+    # Stream the report to the UI
+    await queue.put(sse("report_text", {"text": report_text}))
+
+    # Store the report as a new incident in the RAG library
+    incident_id = f"inc-{uuid.uuid4().hex[:8]}"
+    new_incident = {
+        "id": incident_id,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "duration_minutes": 0,
+        "service": service,
+        "alert_text": alert,
+        "symptoms": {"key_log_messages": []},
+        "root_cause": "",
+        "root_cause_category": "unknown",
+        "evidence": [],
+        "remediation": "",
+        "remediation_successful": True,
+        "narrative": report_text,
+        "follow_up_actions": [],
+        "tags": [service]
+    }
+
+    try:
+        with httpx.Client(timeout=10.0) as http:
+            http.post(f"{RAG_SERVICE_URL}/store", json={"incident": new_incident})
+        await queue.put(sse("report_stored", {
+            "message": f"Report saved to incident library as {incident_id}"
+        }))
+    except Exception as e:
+        await queue.put(sse("report_stored", {
+            "message": f"Note: Could not save report to library — {str(e)}"
+        }))
+
+    await queue.put(sse("done", {"message": "Investigation complete."}))
+    sessions[session_id]["complete"] = True
+
+
+# --- Agent Loop ---
 async def run_agent(session_id: str, alert: str, queue: asyncio.Queue):
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     approval_queue: asyncio.Queue = sessions[session_id]["approval_queue"]
 
+    # Extract service name from alert for report writing
+    service = alert.split()[0] if alert else "unknown"
+
     messages = [{"role": "user", "content": alert}]
     system = (
-    "You are an SRE agent. Investigate the alert by gathering data with the "
-    "read-only tools first. Form a diagnosis, then immediately call the appropriate "
-    "remediation tool — do not ask for confirmation in text first. The approval gate "
-    "will handle human confirmation before any action executes. Always call the tool; "
-    "never ask 'would you like me to proceed?' in text."
-)
+        "You are an SRE agent. Investigate the alert by gathering data with the "
+        "read-only tools first. Form a diagnosis, then immediately call the appropriate "
+        "remediation tool — do not ask for confirmation in text first. The approval gate "
+        "will handle human confirmation before any action executes. Always call the tool; "
+        "never ask 'would you like me to proceed?' in text. "
+        "When you have gathered enough evidence to form a hypothesis about the root cause, "
+        "use the search_past_incidents tool to check if similar incidents have occurred before. "
+        "Use the past incident context to inform your diagnosis and remediation recommendation."
+    )
+
     await queue.put(sse("alert", {"message": alert}))
+
+    # Track investigation transcript for report writing
+    investigation_transcript = []
 
     while True:
         response = await asyncio.get_event_loop().run_in_executor(
@@ -149,15 +264,17 @@ async def run_agent(session_id: str, alert: str, queue: asyncio.Queue):
             )
         )
 
-        # Stream any text the agent produces
         for block in response.content:
             if hasattr(block, "text") and block.text:
                 await queue.put(sse("agent_text", {"text": block.text}))
+                investigation_transcript.append({
+                    "type": "agent_text",
+                    "content": block.text
+                })
 
         if response.stop_reason != "tool_use":
             break
 
-        # Process tool calls
         tool_results = []
         for block in response.content:
             if block.type != "tool_use":
@@ -171,15 +288,12 @@ async def run_agent(session_id: str, alert: str, queue: asyncio.Queue):
                 "inputs": tool_inputs
             }))
 
-            # Remediation tools need human approval
             if tool_name in REMEDIATION_TOOLS:
-                # Tell the UI to show the approve/deny buttons
                 await queue.put(sse("approval_required", {
                     "tool": tool_name,
                     "inputs": tool_inputs
                 }))
 
-                # Wait for the human's decision (posted via /approve endpoint)
                 approved = await approval_queue.get()
 
                 if not approved:
@@ -198,6 +312,14 @@ async def run_agent(session_id: str, alert: str, queue: asyncio.Queue):
                 "tool": tool_name,
                 "result": result
             }))
+
+            investigation_transcript.append({
+                "type": "tool_call",
+                "tool": tool_name,
+                "inputs": tool_inputs,
+                "result": result
+            })
+
             tool_results.append({
                 "type": "tool_result",
                 "tool_use_id": block.id,
@@ -207,8 +329,10 @@ async def run_agent(session_id: str, alert: str, queue: asyncio.Queue):
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results})
 
-    await queue.put(sse("done", {"message": "Investigation complete."}))
-    sessions[session_id]["complete"] = True
+    # Write incident report after investigation completes
+    await write_incident_report(
+        session_id, alert, service, investigation_transcript, queue
+    )
 
 
 # --- Routes ---
@@ -216,6 +340,7 @@ async def run_agent(session_id: str, alert: str, queue: asyncio.Queue):
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(request, "index.html")
+
 
 @app.post("/investigate")
 async def investigate(request: Request):
@@ -236,6 +361,32 @@ async def investigate(request: Request):
 
     asyncio.create_task(run_agent(session_id, alert, event_queue))
     return {"session_id": session_id}
+
+
+@app.post("/search-incidents/{session_id}")
+async def manual_search(session_id: str, request: Request):
+    """Manual search triggered by operator during investigation."""
+    if session_id not in sessions:
+        return {"error": "Session not found"}
+
+    body = await request.json()
+    query = body.get("query", "").strip()
+    if not query:
+        return {"error": "No query provided"}
+
+    try:
+        with httpx.Client(timeout=10.0) as http:
+            result = http.post(f"{RAG_SERVICE_URL}/search", json={"query": query, "n_results": 3}).json()
+
+        # Push the result into the session's event queue so it appears in the timeline
+        event_queue = sessions[session_id]["event_queue"]
+        await event_queue.put(sse("manual_search_result", {
+            "query": query,
+            "result": result
+        }))
+        return {"status": "ok"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.get("/stream/{session_id}")

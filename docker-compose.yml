@@ -20,6 +20,14 @@ services:
     ports:
       - "8004:8004"
 
+  rag-service:
+    build: ./rag-service
+    ports:
+      - "8005:8005"
+    volumes:
+      - ./rag-data:/app/data
+    environment:
+      - RAG_DATA_DIR=/app/data
 
   ui:
     build: ./ui
@@ -32,3 +40,4 @@ services:
       - metrics-checker
       - deploy-checker
       - mock-infra
+      - rag-service
